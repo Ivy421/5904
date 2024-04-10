@@ -5,7 +5,7 @@ clc
 load('task1.mat');
 
 %% Initialization
-gamma = 0.9; % 0.5,0.9 
+gamma = 0.5; % 0.5,0.9 
 pattern = 2; % 1,2,3,4
 
 %% main iteration
@@ -50,10 +50,9 @@ for run = 1:10
     end
     
     % reward shaping
-    [map_label , reach,policy,policy_reward,state_list,marker,x,y,total_reward] = optimal_pi(Q,reward,gamma);
+    [reach,policy,policy_reward,state_list,marker,x,y,total_reward] = optimal_pi(Q,reward,gamma);
     % update optical result
     if total_reward > max_reward
-        op_map_label = map_label;
         max_reward = total_reward;
         op_x = x;
         op_y = y;
@@ -61,6 +60,7 @@ for run = 1:10
         op_policy = policy;
         op_policy_reward = policy_reward;
         op_state_list = state_list;
+        op_Q = Q;
     end
     toc;
     
@@ -94,51 +94,93 @@ grid on;
 hold on;
 title({['\gamma = ',num2str(gamma),' , execution time = ',num2str(execution_time)]});
 for i = 1:length(op_x)
-    scatter(op_x(i),op_y(i)+1, 55 ,'b', char(op_marker(i)) );
+    scatter(op_y(i), op_x(i) , 55 ,'b', char(op_marker(i)) );
     %terminal
     scatter(10,10,300, 'filled' , 'pr');
 end
 hold off;
+%% draw whole map
+[map_marker, optimal_a_idx] = whole_map(op_Q);
+figure()
+axis ij;
+xlim([-1,11]);
+ylim([-1,11]);
+grid on;
+hold on;
+for i = 1:10
+    for j =1:10
+        scatter(j,i, 55, 'b', char(map_marker(i, j)));
+    end
+    scatter (10,10,300,'filled' , 'pr');
+end
+hold off;
 
+%% draw whole map
+function [map_marker, optimal_a_idx] = whole_map(op_Q )
+    map_marker = zeros(10,10);
+    [~, optimal_a_idx] = max(op_Q, [], 2);
+    for i =1:100
+        s = i;
+        while map_marker((fix((s-1)/10) +1)  , mod((s-1),10)+1 ) == 0 && s ~= 100 
+            switch optimal_a_idx(s)
+                case 1
+                    map_marker(fix((s-1)/10) +1,mod((s-1),10)+1 ) = '<';
+                    s = s-1;
+                case 2
+                    map_marker(fix((s-1)/10) +1,mod((s-1),10)+1 ) = 'v';
+                    s = s+10;
+                case 3 
+                    map_marker(fix((s-1)/10) +1,mod((s-1),10)+1 ) = '>';
+                    s = s+1;
+                case 4 
+                    map_marker(fix((s-1)/10) +1,mod((s-1),10)+1 ) = '^';
+                    s = s-10;
+                otherwise
+                    break
+                
+            end
+        end
+    end
+
+end
 
 %%
 % optimal policy
-function [map_label,reach,policy_s,policy_reward,state_list,marker,x,y,total_reward] = optimal_pi(Q,reward,gamma)
+function [reach,policy_s,policy_reward,state_list,marker,x,y,total_reward] = optimal_pi(Q,reward,gamma)
     [~,policy_s]=max(Q,[],2);  % get optimal policy at state s policy_s is a column vec contain max ak idx
     step = 1;
     x = []; % coordinate x
     y = [];
     s = 1;
     marker = [];
-    map_label = zeros(10,10);
     policy_reward = zeros(10,10);
     state_list = [];
 
-    while s < 100 && policy_reward(mod(s,10)+1,fix(s/10)+1)==0  % mod = vertical, fix = horizontal
+    while s < 100  && policy_reward(fix((s-1)/10) +1 ,mod((s-1),10)+1 )==0 % mod = vertical, fix = horizontal
         state_list = [state_list, s];
-        x = [x,mod(s,10)];
-        y = [y,fix(s/10)];
+        y = [y, mod((s-1),10)+1 ];
+        x = [x, (fix((s-1)/10) +1)  ];
         switch policy_s(s)
             case 1  %left
-                map_label(mod(s,10),fix(s/10)+1) = '<';
+                %disp(1);
                 marker = [marker,1];
-                policy_reward(mod(s,10)+1,fix(s/10)+1) = gamma^(step-1)*reward(s,1);
+                policy_reward(fix((s-1)/10) +1,mod((s-1),10)+1 ) = gamma^(step-1)*reward(s,1);
                 s=s-1;
             case 2  %down
-                map_label(mod(s,10)+1,fix(s/10)+1) = 'v';
+                %disp(2);
                 marker = [marker,2];
-                policy_reward(mod(s,10)+1,fix(s/10)+1) = gamma^(step-1)*reward(s,2);
+                policy_reward(fix((s-1)/10) +1,mod((s-1),10)+1 ) = gamma^(step-1)*reward(s,2);
                 s=s+10;
 
             case 3  %right
-                map_label(mod(s,10),fix(s/10)+1) = '>';
+                %disp(3);
                 marker = [marker,3];
-                policy_reward(mod(s,10)+1,fix(s/10)+1) = gamma^(step-1)*reward(s,3);
+                policy_reward(fix((s-1)/10) +1,mod((s-1),10)+1 ) = gamma^(step-1)*reward(s,3);
                 s=s+1;
             case 4 % up
-                map_label(mod(s,10),fix(s/10)+1) = '^';
+                %disp(4);
                 marker = [marker,4];
-                policy_reward(mod(s,10)+1,fix(s/10)+1) = gamma^(step-1)*reward(s,4);
+                policy_reward(fix((s-1)/10) +1,mod((s-1),10)+1 ) = gamma^(step-1)*reward(s,4);
                 s=s-10;
         end
         step = step + 1;
